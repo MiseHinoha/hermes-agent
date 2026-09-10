@@ -20,6 +20,10 @@ from providers.base import ProviderProfile
 # ``deepseek-flash`` and the API accepts it directly, so the generation check in
 # ``build_api_kwargs_extras`` cannot recognise it.
 _THINKING_CAPABLE_IDS: frozenset[str] = frozenset({"deepseek-flash"})
+# Dated snapshots of the version-less id (``deepseek-flash-20260910``) mirror the versioned
+# family's ``deepseek-v4-flash-<date>`` form, which the ``deepseek-v`` prefix rule below
+# already covers — so the version-less branch needs a prefix rule of its own.
+_THINKING_CAPABLE_PREFIXES: tuple[str, ...] = ("deepseek-flash-",)
 
 
 class DeepSeekProfile(ProviderProfile):
@@ -29,12 +33,13 @@ class DeepSeekProfile(ProviderProfile):
         self, *, reasoning_config: dict | None = None, model: str | None = None, **context
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         m = (model or "").strip().lower()
-        # v4+ only; v3 excluded. Version-less canonicals (``deepseek-flash``) carry the
-        # same thinking-mode contract but no ``v<N>`` prefix, so consult the id set too —
-        # missing them makes Hermes omit ``thinking``, so the server defaults to on and
-        # the user's thinking toggle / effort setting is silently ignored.
+        # v4+ only; v3 excluded. Version-less canonicals (``deepseek-flash`` and its dated
+        # snapshots) carry the same thinking-mode contract but no ``v<N>`` prefix, so consult
+        # the id set/prefix too — missing them makes Hermes omit ``thinking``, so the server
+        # defaults to on and the user's thinking toggle / effort setting is silently ignored.
         versioned_v4_plus = m.startswith("deepseek-v") and not m.startswith("deepseek-v3")
-        if not versioned_v4_plus and m not in _THINKING_CAPABLE_IDS:
+        versionless = m in _THINKING_CAPABLE_IDS or m.startswith(_THINKING_CAPABLE_PREFIXES)
+        if not versioned_v4_plus and not versionless:
             return {}, {}
         rc = reasoning_config if isinstance(reasoning_config, dict) else None
         # Always set thinking explicitly (default enabled, matching the API default)

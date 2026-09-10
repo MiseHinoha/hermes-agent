@@ -130,6 +130,28 @@ def test_deepseek_v4_pro_pricing_entry_exists():
     assert float(entry.cache_read_cost_per_million) == 0.003625
 
 
+def test_deepseek_flash_v41_pricing_entry_exists():
+    """The version-less ``deepseek-flash`` id must price, not show unknown cost.
+
+    V4.1-Flash shipped 2026-09-10 and is the id ``GET /v1/models`` advertises; the
+    legacy ``deepseek-v4-flash`` rows are only server-side aliases onto it.  Rates
+    are the published off-peak tier ($0.15 in / $0.60 out / $0.003 cache read per
+    1M); peak hours bill 2x.
+    """
+    entry = get_pricing_entry(
+        "deepseek-flash",
+        provider="deepseek",
+    )
+
+    assert entry is not None
+    assert entry.input_cost_per_million is not None
+    assert entry.output_cost_per_million is not None
+    assert entry.cache_read_cost_per_million is not None
+    assert float(entry.input_cost_per_million) == 0.15
+    assert float(entry.output_cost_per_million) == 0.60
+    assert float(entry.cache_read_cost_per_million) == 0.003
+
+
 def test_bundled_pricing_skips_endpoint_metadata(monkeypatch):
     """An exact bundled price must not block on the provider's /models API."""
     monkeypatch.setattr(

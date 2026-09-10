@@ -112,6 +112,8 @@ class TestDeepSeekModelGating:
             # same thinking-mode contract but no v<N> marker.
             "deepseek-flash",
             "DEEPSEEK-FLASH",  # case-insensitive
+            # Dated snapshots mirror the versioned family's ``-<date>`` form.
+            "deepseek-flash-20260910",
         ],
     )
     def test_thinking_capable_models_emit_thinking(self, deepseek_profile, model):
