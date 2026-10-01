@@ -121,3 +121,34 @@ def test_import_replaces_a_same_slug_pet_only_with_force(pet_home, tmp_path):
 
     assert replaced.display_name == "Boba II"
     assert _installed("boba").display_name == "Boba II"
+
+
+def test_import_drops_an_archive_member_with_no_path_segments(pet_home, tmp_path):
+    """A member named ``.`` carries no segments: junk to skip, never a crash in the guard."""
+    sheet = _sheet_bytes(cols=2, rows=1)
+    archive = tmp_path / "dotted.zip"
+    with zipfile.ZipFile(archive, "w") as zipped:
+        zipped.writestr("pet.json", '{"id":"dotted","displayName":"Dotted","spritesheetPath":"spritesheet.webp"}')
+        zipped.writestr("spritesheet.webp", sheet)
+        zipped.writestr(".", "")
+        zipped.writestr("./.", "")
+
+    imported = store.import_pet(archive)
+
+    assert imported.spritesheet.read_bytes() == sheet
+    assert _installed("dotted").exists
+
+
+def test_import_refuses_a_symlinked_folder_member(pet_home, tmp_path):
+    """A symlink in the folder must not be read through — the zip path refuses those entries too."""
+    outside = tmp_path / "outside.webp"
+    outside.write_bytes(_sheet_bytes(cols=2, rows=1))
+    handout = tmp_path / "handout"
+    handout.mkdir()
+    (handout / "pet.json").write_text('{"id":"linked","displayName":"Linked","spritesheetPath":"spritesheet.webp"}')
+    (handout / "spritesheet.webp").symlink_to(outside)
+
+    with pytest.raises(store.PetStoreError, match="symlink"):
+        store.import_pet(handout)
+
+    assert not (store.pets_dir() / "linked").exists()  # fail-closed: nothing copied out of the folder

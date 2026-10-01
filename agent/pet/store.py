@@ -303,9 +303,15 @@ def _check_import_sheet(data: bytes, label: str) -> None:
 
 
 def _member_parts(name: str) -> list[str]:
-    """Path segments of an archive member; raises on absolute/drive/``..`` (traversal) names."""
+    """Path segments of an archive member; raises on absolute/drive/``..`` (traversal) names.
+
+    A name that reduces to no segments at all (``.``) is junk, not traversal: return ``[]`` so
+    the caller's own empty-parts guard drops it. Indexing ``parts[0]`` first turned that input
+    into an ``IndexError`` no caller catches — the guard must not be crashed by the archives it
+    exists to reject.
+    """
     parts = [p for p in name.replace("\\", "/").split("/") if p not in ("", ".")]
-    if name.startswith(("/", "\\")) or ":" in parts[0] or ".." in parts:
+    if name.startswith(("/", "\\")) or ".." in parts or (parts and ":" in parts[0]):
         raise PetStoreError(f"unsafe path in archive: {name}")
     return parts
 
@@ -358,7 +364,15 @@ def _folder_members(path: Path) -> dict[str, bytes]:
     files: dict[str, bytes] = {}
     total = 0
     for child in sorted(path.iterdir()):
-        if not child.is_file() or child.name.startswith("."):
+        # Both checks precede the dotfile skip: a symlink must never be skipped silently, and
+        # ``is_file()`` stats *through* a link — so without this a link reads as an ordinary pet
+        # file and copies its target's bytes out of the folder. The zip branch refuses symlink
+        # entries for the same reason.
+        if child.is_symlink():
+            raise PetStoreError(f"unsafe path in folder: {child.name} (symlink)")
+        if child.name.startswith("."):
+            continue
+        if not child.is_file():
             continue
         data = child.read_bytes()
         total += len(data)
